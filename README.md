@@ -28,4 +28,4 @@ Cloudformation resources:
 
 ## Status
 
-Project is: in progress
+Project is: finished

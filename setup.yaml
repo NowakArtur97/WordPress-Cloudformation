@@ -85,7 +85,6 @@ Resources:
         - !Ref DatabaseSubnetB
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    # DependsOn: WordpressSecurityGroup # TODO: DELETE?
     Properties:
       GroupDescription: Open database for application access
       VpcId: !Ref VPC
@@ -182,22 +181,23 @@ Resources:
           export DATABASE_USER=${DBUsername}
           export DATABASE_PASSWORD=${DBPassword}
           export DATABASE_HOST="${Database.Endpoint.Address}"
-          sudo yum install -y httpd
-          sudo service httpd start
-          mkdir /home/ec2-user/wordpress-tar
-          cd /home/ec2-user/wordpress-tar
+          yum install -y httpd
+          service httpd start
+          mkdir /home/ec2-user/wordpress-files
+          cd /home/ec2-user/wordpress-files
           wget https://wordpress.org/latest.tar.gz
           tar -xzf latest.tar.gz
-          cd /home/ec2-user/wordpress-tar/wordpress
+          cd /home/ec2-user/wordpress-files/wordpress
           cp wp-config-sample.php wp-config.php
           sed "s/database_name_here/$DATABASE_NAME/g" -i wp-config.php
           sed "s/username_here/$DATABASE_USER/g" -i wp-config.php
           sed "s/password_here/$DATABASE_PASSWORD/g" -i wp-config.php
           sed "s/localhost/$DATABASE_HOST/g" -i wp-config.php
-          sudo amazon-linux-extras install -y mariadb10.5 php8.2
-          cd /home/ec2-user/wordpress-tar
-          sudo cp -r wordpress/* /var/www/html/
-          sudo service httpd restart
+          amazon-linux-extras install -y mariadb10.5 php8.2
+          mkdir /home/ec2-user/wordpress-files/wordpress/wp-content/uploads
+          cp -r /home/ec2-user/wordpress-files/wordpress/* /var/www/html/
+          chmod 0777 /var/www/html/wp-content/uploads
+          service httpd restart
 Outputs:
   WordpressIP:
     Description: Wordpress EC2 instance public IP
