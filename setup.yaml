@@ -25,6 +25,15 @@ Parameters:
     AllowedPattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/([0-9]|[1-2][0-9]|3[0-2]))?$"
     ConstraintDescription: The value must be valid IPv4 CIDR block.
     Default: 0.0.0.0/32
+  DBName:
+    Type: String
+    Default: wordpress
+  DBUsername:
+    Type: String
+    Default: wordpress
+  DBPassword:
+    Type: String
+    Default: wordpress
 Resources:
   ############################ VPC ############################
   VPC:
@@ -47,6 +56,62 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
+  ############################ Database ############################
+  DatabaseSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.16.0.32/27
+      Tags:
+        - Key: Name
+          Value: wordpress-sn-database-a
+  DatabaseSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.16.0.64/27
+      Tags:
+        - Key: Name
+          Value: wordpress-sn-database-b
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: wordpress-sn-group
+      DBSubnetGroupDescription: Database Subnet Group
+      SubnetIds:
+        - !Ref DatabaseSubnetA
+        - !Ref DatabaseSubnetB
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    # DependsOn: WordpressSecurityGroup # TODO: DELETE?
+    Properties:
+      GroupDescription: Open database for application access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WordpressSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WordpressSecurityGroup
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: MySQL
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+  ############################ EC2 ############################
   WordpressRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -113,8 +178,26 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          yum install -y httpd
-          service httpd start
+          export DATABASE_NAME=${DBName}
+          export DATABASE_USER=${DBUsername}
+          export DATABASE_PASSWORD=${DBPassword}
+          export DATABASE_HOST="${Database.Endpoint.Address}"
+          sudo yum install -y httpd
+          sudo service httpd start
+          mkdir /home/ec2-user/wordpress-tar
+          cd /home/ec2-user/wordpress-tar
+          wget https://wordpress.org/latest.tar.gz
+          tar -xzf latest.tar.gz
+          cd /home/ec2-user/wordpress-tar/wordpress
+          cp wp-config-sample.php wp-config.php
+          sed "s/database_name_here/$DATABASE_NAME/g" -i wp-config.php
+          sed "s/username_here/$DATABASE_USER/g" -i wp-config.php
+          sed "s/password_here/$DATABASE_PASSWORD/g" -i wp-config.php
+          sed "s/localhost/$DATABASE_HOST/g" -i wp-config.php
+          sudo amazon-linux-extras install -y mariadb10.5 php8.2
+          cd /home/ec2-user/wordpress-tar
+          sudo cp -r wordpress/* /var/www/html/
+          sudo service httpd restart
 Outputs:
   WordpressIP:
     Description: Wordpress EC2 instance public IP
