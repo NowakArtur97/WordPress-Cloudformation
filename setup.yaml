@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Wordpress Template
+Parameters:
+  InstanceType:
+    Type: String
+    Description: EC2 instances size
+    Default: t2.micro
+  ImageId:
+    Type: String
+    Description: EC2 instances image id
+    Default: ami-00b8917ae86a424c9
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an EC2 KeyPair to enable SSH access to the instance
+    Default: wordpress
+  SshPort:
+    Type: Number
+    Description: SSH port
+    Default: 22
+    MinValue: 22
+    MaxValue: 65535
+  SourceCidr:
+    Type: String
+    Description: CIDR Block of IPv4 IP addresses allowed to access EC2 instances via SSH
+    AllowedPattern: "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(/([0-9]|[1-2][0-9]|3[0-2]))?$"
+    ConstraintDescription: The value must be valid IPv4 CIDR block.
+    Default: 0.0.0.0/32
+Resources:
+  ############################ VPC ############################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.16.0.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: wordpress-vpc
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: wordpress-igw
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
